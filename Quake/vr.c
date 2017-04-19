@@ -86,6 +86,7 @@ extern int glx, gly, glwidth, glheight;
 extern refdef_t r_refdef;
 extern vec3_t vright;
 
+
 vr::IVRSystem *ovrHMD;
 vr::TrackedDevicePose_t ovr_DevicePose[vr::k_unMaxTrackedDeviceCount];
 
@@ -352,6 +353,48 @@ void VR_UpdateScreenContent()
         RenderScreenForCurrentEye_OVR();
     }
 
+}
+
+void VR_SetMatrices() {
+    /*vec3_t temp, orientation, position;
+    ovrMatrix4f projection;
+
+    // Calculat HMD projection matrix and view offset position
+    projection = TransposeMatrix(ovrMatrix4f_Projection(hmd.DefaultEyeFov[current_eye->index], 4, gl_farclip.value, ovrProjection_None));
+
+    // We need to scale the view offset position to quake units and rotate it by the current input angles (viewangle - eye orientation)
+    QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
+    temp[0] = -current_eye->pose.Position.z * meters_to_units;
+    temp[1] = -current_eye->pose.Position.x * meters_to_units;
+    temp[2] = current_eye->pose.Position.y * meters_to_units;
+    Vec3RotateZ(temp, (r_refdef.viewangles[YAW] - orientation[YAW])*M_PI_DIV_180, position);
+
+
+    // Set OpenGL projection and view matrices
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf((GLfloat*)projection.M);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glRotatef(-90, 1, 0, 0); // put Z going up
+    glRotatef(90, 0, 0, 1); // put Z going up
+
+    glRotatef(-r_refdef.viewangles[PITCH], 0, 1, 0);
+    glRotatef(-r_refdef.viewangles[ROLL], 1, 0, 0);
+    glRotatef(-r_refdef.viewangles[YAW], 0, 0, 1);
+
+    glTranslatef(-r_refdef.vieworg[0] - position[0], -r_refdef.vieworg[1] - position[1], -r_refdef.vieworg[2] - position[2]);*/
+}
+
+void VR_AddOrientationToViewAngles(vec3_t angles)
+{
+    /*vec3_t orientation;
+    QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
+
+    angles[PITCH] = angles[PITCH] + orientation[PITCH];
+    angles[YAW] = angles[YAW] + orientation[YAW];
+    angles[ROLL] = orientation[ROLL];*/
 }
 
 void VR_ShowCrosshair()

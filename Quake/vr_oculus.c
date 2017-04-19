@@ -111,7 +111,6 @@ static int attempt_to_refocus_retry = 0;
 // 1.0 pixel unit / 1.5 inch == 0.666666 pixel units per inch
 static const float meters_to_units = 1.0f / (1.5f * 0.0254f);
 
-
 extern cvar_t gl_farclip;
 extern int glwidth, glheight;
 extern void SCR_UpdateScreenContent();

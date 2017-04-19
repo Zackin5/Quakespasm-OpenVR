@@ -246,7 +246,7 @@
     <ClCompile Include="..\..\Quake\vr_oculus.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Quake\vr.cc">
+    <ClCompile Include="..\..\Quake\vr.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
