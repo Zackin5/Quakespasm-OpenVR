@@ -20,7 +20,6 @@ extern void VID_Refocus();
 
 typedef struct {
     GLuint framebuffer, depth_texture;
-    //vr::TextureID_t eye_texture;
     struct {
         float width, height;
     } size;
@@ -30,6 +29,7 @@ typedef struct {
     int index;
     fbo_t fbo;
     Hmd_Eye eye;
+    TrackedDevicePose_t pose;
     float fov_x, fov_y;
 } vr_eye_t;
 
@@ -164,6 +164,70 @@ fbo_t CreateFBO(int width, int height) {
 void DeleteFBO(fbo_t fbo) {
     glDeleteFramebuffersEXT(1, &fbo.framebuffer);
     glDeleteTextures(1, &fbo.depth_texture);
+}
+
+void QuatToYawPitchRoll(HmdQuaternion_t q, vec3_t out) {
+    float sqw = q.w*q.w;
+    float sqx = q.x*q.x;
+    float sqy = q.y*q.y;
+    float sqz = q.z*q.z;
+    float unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
+    float test = q.x*q.y + q.z*q.w;
+    if (test > 0.499*unit) { // singularity at north pole
+        out[YAW] = 2 * atan2(q.x, q.w) / M_PI_DIV_180;
+        out[ROLL] = -M_PI / 2 / M_PI_DIV_180;
+        out[PITCH] = 0;
+    }
+    else if (test < -0.499*unit) { // singularity at south pole
+        out[YAW] = -2 * atan2(q.x, q.w) / M_PI_DIV_180;
+        out[ROLL] = M_PI / 2 / M_PI_DIV_180;
+        out[PITCH] = 0;
+    }
+    else {
+        out[YAW] = atan2(2 * q.y*q.w - 2 * q.x*q.z, sqx - sqy - sqz + sqw) / M_PI_DIV_180;
+        out[ROLL] = -asin(2 * test / unit) / M_PI_DIV_180;
+        out[PITCH] = -atan2(2 * q.x*q.w - 2 * q.y*q.z, -sqx + sqy - sqz + sqw) / M_PI_DIV_180;
+    }
+}
+
+void Vec3RotateZ(vec3_t in, float angle, vec3_t out) {
+    out[0] = in[0] * cos(angle) - in[1] * sin(angle);
+    out[1] = in[0] * sin(angle) + in[1] * cos(angle);
+    out[2] = in[2];
+}
+
+HmdMatrix44_t TransposeMatrix(HmdMatrix44_t in) {
+    HmdMatrix44_t out;
+    int y, x;
+    for (y = 0; y < 4; y++)
+        for (x = 0; x < 4; x++)
+            out.m[x][y] = in.m[y][x];
+
+    return out;
+}
+
+// Following functions nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
+HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) {
+    HmdVector3_t vector;
+
+    vector.v[0] = in.m[0][3];
+    vector.v[1] = in.m[1][3];
+    vector.v[2] = in.m[2][3];
+
+    return vector;
+}
+
+HmdQuaternion_t Matrix34ToQuaternation(HmdMatrix34_t in) {
+    HmdQuaternion_t q;
+
+    q.w = sqrt(fmax(0, 1 + in.m[0][0] + in.m[1][1] + in.m[2][2])) / 2;
+    q.x = sqrt(fmax(0, 1 + in.m[0][0] - in.m[1][1] - in.m[2][2])) / 2;
+    q.y = sqrt(fmax(0, 1 - in.m[0][0] + in.m[1][1] - in.m[2][2])) / 2;
+    q.z = sqrt(fmax(0, 1 - in.m[0][0] - in.m[1][1] + in.m[2][2])) / 2;
+    q.x = copysign(q.x, in.m[2][1] - in.m[1][2]);
+    q.y = copysign(q.y, in.m[0][2] - in.m[2][0]);
+    q.z = copysign(q.z, in.m[1][0] - in.m[0][1]);
+    return q;
 }
 
 
@@ -315,9 +379,7 @@ static void RenderScreenForCurrentEye_OVR()
 
     Texture_t eyeTexture = { (void*)(uintptr_t)current_eye->fbo.framebuffer, TextureType_OpenGL, ColorSpace_Gamma };
 
-    EVRSubmitFlags ovrSubmitflags = Submit_Default;
-
-    IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture, NULL, ovrSubmitflags);
+    IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture, NULL, Submit_Default);
 
 
     // Reset
@@ -333,8 +395,6 @@ void VR_UpdateScreenContent()
 {
     int i;
     vec3_t orientation;
-
-    GLint w, h;
 
     // Last chance to enable VR Mode - we get here when the game already start up with vr_enabled 1
     // If enabling fails, unset the cvar and return.
@@ -354,11 +414,11 @@ void VR_UpdateScreenContent()
 }
 
 void VR_SetMatrices() {
-    /*vec3_t temp, orientation, position;
-    ovrMatrix4f projection;
+    vec3_t temp, orientation, position;
+    HmdMatrix44_t projection;
 
     // Calculat HMD projection matrix and view offset position
-    projection = TransposeMatrix(ovrMatrix4f_Projection(hmd.DefaultEyeFov[current_eye->index], 4, gl_farclip.value, ovrProjection_None));
+    projection = TransposeMatrix(IVRSystem_GetProjectionMatrix(ovrHMD, current_eye, 4.f, gl_farclip.value));
 
     // We need to scale the view offset position to quake units and rotate it by the current input angles (viewangle - eye orientation)
     QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
@@ -370,7 +430,7 @@ void VR_SetMatrices() {
 
     // Set OpenGL projection and view matrices
     glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf((GLfloat*)projection.M);
+    glLoadMatrixf((GLfloat*)projection.m);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -382,17 +442,17 @@ void VR_SetMatrices() {
     glRotatef(-r_refdef.viewangles[ROLL], 1, 0, 0);
     glRotatef(-r_refdef.viewangles[YAW], 0, 0, 1);
 
-    glTranslatef(-r_refdef.vieworg[0] - position[0], -r_refdef.vieworg[1] - position[1], -r_refdef.vieworg[2] - position[2]);*/
+    glTranslatef(-r_refdef.vieworg[0] - position[0], -r_refdef.vieworg[1] - position[1], -r_refdef.vieworg[2] - position[2]);
 }
 
 void VR_AddOrientationToViewAngles(vec3_t angles)
 {
-    /*vec3_t orientation;
+    vec3_t orientation;
     QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
 
     angles[PITCH] = angles[PITCH] + orientation[PITCH];
     angles[YAW] = angles[YAW] + orientation[YAW];
-    angles[ROLL] = orientation[ROLL];*/
+    angles[ROLL] = orientation[ROLL];
 }
 
 void VR_ShowCrosshair()

@@ -805,7 +805,7 @@ typedef enum EVRInitError EVRInitError;
 // *********** 
 typedef struct IVRSystem IVRSystem;
 void	IVRSystem_GetRecommendedRenderTargetSize(IVRSystem * this_, uint32_t * pnWidth, uint32_t * pnHeight);
-HmdMatrix44_t	IVRSystem_GetProjectionMatrix(IVRSystem * this_, EVREye eEye, float fNearZ, float fFarZ, ETextureType eProjType);
+HmdMatrix44_t	IVRSystem_GetProjectionMatrix(IVRSystem * this_, EVREye eEye, float fNearZ, float fFarZ);
 void	IVRSystem_GetProjectionRaw(IVRSystem * this_, EVREye eEye, float * pfLeft, float * pfRight, float * pfTop, float * pfBottom);
 DistortionCoordinates_t	IVRSystem_ComputeDistortion(IVRSystem * this_, EVREye eEye, float fU, float fV);
 HmdMatrix34_t	IVRSystem_GetEyeToHeadTransform(IVRSystem * this_, EVREye eEye);
