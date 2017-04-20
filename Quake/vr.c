@@ -7,7 +7,7 @@
 #include <mmsystem.h>
 #undef UNICODE
 
-#include "openvr.h"
+#include "openvr_c.h"
 
 #if SDL_MAJOR_VERSION < 2
 FILE *__iob_func() {
@@ -29,7 +29,7 @@ typedef struct {
 typedef struct {
     int index;
     fbo_t fbo;
-    vr::Hmd_Eye eye;
+    Hmd_Eye eye;
     float fov_x, fov_y;
 } vr_eye_t;
 
@@ -87,8 +87,8 @@ extern refdef_t r_refdef;
 extern vec3_t vright;
 
 
-vr::IVRSystem *ovrHMD;
-vr::TrackedDevicePose_t ovr_DevicePose[vr::k_unMaxTrackedDeviceCount];
+IVRSystem *ovrHMD;
+TrackedDevicePose_t ovr_DevicePose[16]; //k_unMaxTrackedDeviceCount
 
 static vr_eye_t eyes[2];
 static vr_eye_t *current_eye = NULL;
@@ -172,7 +172,7 @@ void DeleteFBO(fbo_t fbo) {
 
 static void VR_Enabled_f(cvar_t *var)
 {
-    VR_Disable();
+    VID_VR_Disable();
 
     if (!vr_enabled.value)
         return;
@@ -196,7 +196,7 @@ static void VR_Deadzone_f(cvar_t *var)
 // ----------------------------------------------------------------------------
 // Public vars and functions
 
-void VR_Init()
+void VID_VR_Init()
 {
     // This is only called once at game start
     Cvar_RegisterVariable(&vr_enabled);
@@ -229,11 +229,11 @@ qboolean VR_Enable()
     int mirror_texture_id = 0;
     UINT ovr_audio_id;
 
-    vr::EVRInitError eInit = vr::VRInitError_None;
-    ovrHMD = vr::VR_Init(&eInit, vr::VRApplication_Scene);
+    EVRInitError eInit = VRInitError_None;
+    ovrHMD = VR_Init(&eInit, VRApplication_Scene);
 
-    if (eInit != vr::VRInitError_None) {
-        Con_Printf("%s\nFailed to Initialize Steam VR", vr::VR_GetVRInitErrorAsEnglishDescription(eInit));
+    if (eInit != VRInitError_None) {
+        Con_Printf("%s\nFailed to Initialize Steam VR", VR_GetVRInitErrorAsEnglishDescription(eInit));
         return false;
     }
 
@@ -242,15 +242,15 @@ qboolean VR_Enable()
         return false;
     }
 
-    eyes[0].eye = vr::Eye_Left;
-    eyes[1].eye = vr::Eye_Right;
+    eyes[0].eye = Eye_Left;
+    eyes[1].eye = Eye_Right;
 
     for (i = 0; i < 2; i++) {
         uint32_t vrwidth, vrheight;
         float LeftTan, RightTan, UpTan, DownTan;
 
-        ovrHMD->GetRecommendedRenderTargetSize(&vrwidth, &vrheight);
-        ovrHMD->GetProjectionRaw(eyes[0].eye, &LeftTan, &RightTan, &UpTan, &DownTan); // TODO: Not 100% sure these are actually tangent values
+        IVRSystem_GetRecommendedRenderTargetSize(&ovrHMD, &vrwidth, &vrheight);
+        IVRSystem_GetProjectionRaw(&ovrHMD, eyes[0].eye, &LeftTan, &RightTan, &UpTan, &DownTan); // TODO: Not 100% sure these are actually tangent values
 
         eyes[i].index = i;
         eyes[i].fbo = CreateFBO(vrwidth, vrheight);
@@ -266,17 +266,17 @@ qboolean VR_Enable()
 }
 
 
-void VR_Shutdown() {
-    VR_Disable();
+void VID_VR_Shutdown() {
+    VID_VR_Disable();
 }
 
-void VR_Disable()
+void VID_VR_Disable()
 {
     int i;
     if (!vr_initialized)
         return;
 
-    vr::VR_Shutdown();
+    VR_Shutdown();
     ovrHMD = NULL;
 
     // TODO: Cleanup frame buffers
@@ -293,12 +293,8 @@ static void RenderScreenForCurrentEye_OVR()
     int oldglheight = glheight;
     int oldglwidth = glwidth;
 
-    uint32_t vrwidth, vrheight;
-
-    ovrHMD->GetRecommendedRenderTargetSize(&vrwidth, &vrheight);
-
-    glwidth = vrwidth;
-    glheight = vrheight;
+    glwidth = current_eye->fbo.size.width;
+    glheight = current_eye->fbo.size.height;
 
     // Set up current FBO
     glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, current_eye->fbo.framebuffer);
@@ -317,9 +313,11 @@ static void RenderScreenForCurrentEye_OVR()
 
     SCR_UpdateScreenContent();
 
-    vr::Texture_t eyeTexture = { reinterpret_cast<void*>(intptr_t(current_eye->fbo.framebuffer)), vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
+    Texture_t eyeTexture = { (void*)(uintptr_t)current_eye->fbo.framebuffer, TextureType_OpenGL, ColorSpace_Gamma };
 
-    vr::VRCompositor()->Submit(current_eye->eye, &eyeTexture);
+    EVRSubmitFlags ovrSubmitflags = Submit_Default;
+
+    IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture, NULL, ovrSubmitflags);
 
 
     // Reset
@@ -345,7 +343,7 @@ void VR_UpdateScreenContent()
         return;
     }
 
-    vr::VRCompositor()->WaitGetPoses(ovr_DevicePose, vr::k_unMaxTrackedDeviceCount, NULL, 0);
+    IVRCompositor_WaitGetPoses(VRCompositor(), ovr_DevicePose, k_unMaxTrackedDeviceCount, NULL, 0);
 
     // Render the scene for each eye into their FBOs
     for (i = 0; i < 2; i++) {
@@ -606,7 +604,7 @@ void VR_ResetOrientation()
     cl.aimangles[YAW] = cl.viewangles[YAW];
     cl.aimangles[PITCH] = cl.viewangles[PITCH];
     if (vr_enabled.value) {
-        ovrHMD->ResetSeatedZeroPose();
+        IVRSystem_ResetSeatedZeroPose(&ovrHMD);
         VectorCopy(cl.aimangles, lastAim);
     }
 }

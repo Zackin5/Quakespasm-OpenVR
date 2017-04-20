@@ -935,7 +935,7 @@ void Host_Shutdown(void)
 		CDAudio_Shutdown ();
 		S_Shutdown ();
 		IN_Shutdown ();
-		VR_Shutdown();
+        VID_VR_Shutdown();
 		VID_Shutdown();
 	}
 

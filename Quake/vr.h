@@ -16,10 +16,10 @@
 #define	VR_CROSSHAIR_POINT 1 // Point crosshair projected to depth of object it is in front of
 #define	VR_CROSSHAIR_LINE 2 // Line crosshair
 
-void VR_Init();
-void VR_Shutdown();
+void VID_VR_Init();
+void VID_VR_Shutdown();
 qboolean VR_Enable();
-void VR_Disable();
+void VID_VR_Disable();
 
 void VR_UpdateScreenContent();
 void VR_ShowCrosshair();

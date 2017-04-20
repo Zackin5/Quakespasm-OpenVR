@@ -743,7 +743,7 @@ static void VID_Restart (void)
 		return;
 
 	if (vr_enabled.value)
-		VR_Disable();
+		VID_VR_Disable();
 
 	width = (int)vid_width.value;
 	height = (int)vid_height.value;
