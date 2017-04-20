@@ -249,8 +249,8 @@ qboolean VR_Enable()
         uint32_t vrwidth, vrheight;
         float LeftTan, RightTan, UpTan, DownTan;
 
-        IVRSystem_GetRecommendedRenderTargetSize(&ovrHMD, &vrwidth, &vrheight);
-        IVRSystem_GetProjectionRaw(&ovrHMD, eyes[0].eye, &LeftTan, &RightTan, &UpTan, &DownTan); // TODO: Not 100% sure these are actually tangent values
+        IVRSystem_GetRecommendedRenderTargetSize(ovrHMD, &vrwidth, &vrheight);
+        IVRSystem_GetProjectionRaw(ovrHMD, eyes[0].eye, &LeftTan, &RightTan, &UpTan, &DownTan); // TODO: Not 100% sure these are actually tangent values
 
         eyes[i].index = i;
         eyes[i].fbo = CreateFBO(vrwidth, vrheight);
@@ -604,7 +604,7 @@ void VR_ResetOrientation()
     cl.aimangles[YAW] = cl.viewangles[YAW];
     cl.aimangles[PITCH] = cl.viewangles[PITCH];
     if (vr_enabled.value) {
-        IVRSystem_ResetSeatedZeroPose(&ovrHMD);
+        IVRSystem_ResetSeatedZeroPose(ovrHMD);
         VectorCopy(cl.aimangles, lastAim);
     }
 }
