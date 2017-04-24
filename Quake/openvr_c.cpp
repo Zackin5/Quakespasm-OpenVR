@@ -536,7 +536,11 @@ EVRCompositorError IVRCompositor_GetLastPoseForTrackedDeviceIndex(IVRCompositor 
     return this_->GetLastPoseForTrackedDeviceIndex(unDeviceIndex, pOutputPose, pOutputGamePose);
 }
 
-EVRCompositorError IVRCompositor_Submit(IVRCompositor * this_, EVREye eEye, Texture_t * pTexture, VRTextureBounds_t * pBounds, EVRSubmitFlags nSubmitFlags) {
+EVRCompositorError IVRCompositor_Submit(IVRCompositor * this_, EVREye eEye, Texture_t * pTexture) {
+    return this_->Submit(eEye, pTexture);
+}
+
+EVRCompositorError IVRCompositor_Submit_Bounds(IVRCompositor * this_, EVREye eEye, Texture_t * pTexture, VRTextureBounds_t * pBounds, EVRSubmitFlags nSubmitFlags) {
     return this_->Submit(eEye, pTexture, pBounds, nSubmitFlags);
 }
 

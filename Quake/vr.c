@@ -19,7 +19,7 @@ FILE *__iob_func() {
 extern void VID_Refocus();
 
 typedef struct {
-    GLuint framebuffer, depth_texture;
+    GLuint framebuffer, depth_texture, texture;
     struct {
         float width, height;
     } size;
@@ -29,7 +29,8 @@ typedef struct {
     int index;
     fbo_t fbo;
     Hmd_Eye eye;
-    TrackedDevicePose_t pose;
+    HmdVector3_t position;
+    HmdQuaternion_t orientation;
     float fov_x, fov_y;
 } vr_eye_t;
 
@@ -96,6 +97,7 @@ static vec3_t lastOrientation = { 0, 0, 0 };
 static vec3_t lastAim = { 0, 0, 0 };
 
 static qboolean vr_initialized = false;
+static GLuint mirror_texture = 0;
 static GLuint mirror_fbo = 0;
 static int attempt_to_refocus_retry = 0;
 
@@ -158,12 +160,21 @@ fbo_t CreateFBO(int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
 
+    glGenTextures(1, &fbo.texture);
+    glBindTexture(GL_TEXTURE_2D, fbo.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+
     return fbo;
 }
 
 void DeleteFBO(fbo_t fbo) {
     glDeleteFramebuffersEXT(1, &fbo.framebuffer);
     glDeleteTextures(1, &fbo.depth_texture);
+    glDeleteTextures(1, &fbo.texture);
 }
 
 void QuatToYawPitchRoll(HmdQuaternion_t q, vec3_t out) {
@@ -289,9 +300,7 @@ void VID_VR_Init()
 
 qboolean VR_Enable()
 {
-    int i;
     int mirror_texture_id = 0;
-    UINT ovr_audio_id;
 
     EVRInitError eInit = VRInitError_None;
     ovrHMD = VR_Init(&eInit, VRApplication_Scene);
@@ -306,10 +315,23 @@ qboolean VR_Enable()
         return false;
     }
 
+    // TODO: dunno if this does anything
+    glGenTextures(1, &mirror_texture);
+    glBindTexture(GL_TEXTURE_2D, mirror_texture);
+
+    glGenFramebuffersEXT(1, &mirror_fbo);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, mirror_fbo);
+
+    glFramebufferTexture2DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, mirror_texture_id, 0);
+    glFramebufferRenderbufferEXT(GL_READ_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT, 0);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
+
     eyes[0].eye = Eye_Left;
     eyes[1].eye = Eye_Right;
 
-    for (i = 0; i < 2; i++) {
+    IVRCompositor_ShowMirrorWindow(VRCompositor());
+
+    for (int i = 0; i < 2; i++) {
         uint32_t vrwidth, vrheight;
         float LeftTan, RightTan, UpTan, DownTan;
 
@@ -340,6 +362,8 @@ void VID_VR_Disable()
     if (!vr_initialized)
         return;
 
+    IVRCompositor_HideMirrorWindow(VRCompositor());
+
     VR_Shutdown();
     ovrHMD = NULL;
 
@@ -362,12 +386,11 @@ static void RenderScreenForCurrentEye_OVR()
 
     // Set up current FBO
     glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, current_eye->fbo.framebuffer);
-    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, swap_texture_id, 0);
+    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, current_eye->fbo.texture, 0);
     glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, current_eye->fbo.depth_texture, 0);
 
     glViewport(0, 0, current_eye->fbo.size.width, current_eye->fbo.size.height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 
     // Draw everything
     srand((int)(cl.time * 1000)); //sync random stuff between eyes
@@ -377,10 +400,10 @@ static void RenderScreenForCurrentEye_OVR()
 
     SCR_UpdateScreenContent();
 
-    Texture_t eyeTexture = { (void*)(uintptr_t)current_eye->fbo.framebuffer, TextureType_OpenGL, ColorSpace_Gamma };
+    // Generate the eye texture and send it to the HMD
+    Texture_t eyeTexture = { (void*)(uintptr_t)current_eye->fbo.texture, TextureType_OpenGL, ColorSpace_Gamma };
 
-    IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture, NULL, Submit_Default);
-
+    IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture);
 
     // Reset
     glwidth = oldglwidth;
@@ -395,6 +418,7 @@ void VR_UpdateScreenContent()
 {
     int i;
     vec3_t orientation;
+    GLint w, h;
 
     // Last chance to enable VR Mode - we get here when the game already start up with vr_enabled 1
     // If enabling fails, unset the cvar and return.
@@ -403,7 +427,84 @@ void VR_UpdateScreenContent()
         return;
     }
 
+    w = glwidth;
+    h = glheight;
+
+    // TODO: actually make this correct??
+    QuatToYawPitchRoll(eyes[0].orientation, orientation);
+    switch ((int)vr_aimmode.value)
+    {
+        // 1: (Default) Head Aiming; View YAW is mouse+head, PITCH is head
+    default:
+    case VR_AIMMODE_HEAD_MYAW:
+        cl.viewangles[PITCH] = cl.aimangles[PITCH] = orientation[PITCH];
+        cl.aimangles[YAW] = cl.viewangles[YAW] = cl.aimangles[YAW] + orientation[YAW] - lastOrientation[YAW];
+        break;
+
+        // 2: Head Aiming; View YAW and PITCH is mouse+head (this is stupid)
+    case VR_AIMMODE_HEAD_MYAW_MPITCH:
+        cl.viewangles[PITCH] = cl.aimangles[PITCH] = cl.aimangles[PITCH] + orientation[PITCH] - lastOrientation[PITCH];
+        cl.aimangles[YAW] = cl.viewangles[YAW] = cl.aimangles[YAW] + orientation[YAW] - lastOrientation[YAW];
+        break;
+
+        // 3: Mouse Aiming; View YAW is mouse+head, PITCH is head
+    case VR_AIMMODE_MOUSE_MYAW:
+        cl.viewangles[PITCH] = orientation[PITCH];
+        cl.viewangles[YAW] = cl.aimangles[YAW] + orientation[YAW];
+        break;
+
+        // 4: Mouse Aiming; View YAW and PITCH is mouse+head
+    case VR_AIMMODE_MOUSE_MYAW_MPITCH:
+        cl.viewangles[PITCH] = cl.aimangles[PITCH] + orientation[PITCH];
+        cl.viewangles[YAW] = cl.aimangles[YAW] + orientation[YAW];
+        break;
+
+    case VR_AIMMODE_BLENDED:
+    case VR_AIMMODE_BLENDED_NOPITCH:
+    {
+        float diffHMDYaw = orientation[YAW] - lastOrientation[YAW];
+        float diffHMDPitch = orientation[PITCH] - lastOrientation[PITCH];
+        float diffAimYaw = cl.aimangles[YAW] - lastAim[YAW];
+        float diffYaw;
+
+        // find new view position based on orientation delta
+        cl.viewangles[YAW] += diffHMDYaw;
+
+        // find difference between view and aim yaw
+        diffYaw = cl.viewangles[YAW] - cl.aimangles[YAW];
+
+        if (abs(diffYaw) > vr_deadzone.value / 2.0f)
+        {
+            // apply the difference from each set of angles to the other
+            cl.aimangles[YAW] += diffHMDYaw;
+            cl.viewangles[YAW] += diffAimYaw;
+        }
+        if ((int)vr_aimmode.value == VR_AIMMODE_BLENDED) {
+            cl.aimangles[PITCH] += diffHMDPitch;
+        }
+        cl.viewangles[PITCH] = orientation[PITCH];
+    }
+    break;
+    }
+    cl.viewangles[ROLL] = orientation[ROLL];
+
+    VectorCopy(orientation, lastOrientation);
+    VectorCopy(cl.aimangles, lastAim);
+
+    VectorCopy(cl.viewangles, r_refdef.viewangles);
+    VectorCopy(cl.aimangles, r_refdef.aimangles);
+
+    // Get the HMD orientation
     IVRCompositor_WaitGetPoses(VRCompositor(), ovr_DevicePose, k_unMaxTrackedDeviceCount, NULL, 0);
+
+    for (int iDevice = 0; iDevice < k_unMaxTrackedDeviceCount; iDevice++)
+    {
+        if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD )
+        {
+            eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+        }
+    }
 
     // Render the scene for each eye into their FBOs
     for (i = 0; i < 2; i++) {
@@ -411,20 +512,27 @@ void VR_UpdateScreenContent()
         RenderScreenForCurrentEye_OVR();
     }
 
+    // Blit mirror texture to backbuffer
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, mirror_fbo);
+    glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
+    glBlitFramebufferEXT(0, h, w, 0, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
+
+
 }
 
 void VR_SetMatrices() {
     vec3_t temp, orientation, position;
     HmdMatrix44_t projection;
 
-    // Calculat HMD projection matrix and view offset position
-    projection = TransposeMatrix(IVRSystem_GetProjectionMatrix(ovrHMD, current_eye, 4.f, gl_farclip.value));
+    // Calculate HMD projection matrix and view offset position
+    projection = TransposeMatrix(IVRSystem_GetProjectionMatrix(ovrHMD, current_eye->eye, 4.f, gl_farclip.value));
 
     // We need to scale the view offset position to quake units and rotate it by the current input angles (viewangle - eye orientation)
-    QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
-    temp[0] = -current_eye->pose.Position.z * meters_to_units;
-    temp[1] = -current_eye->pose.Position.x * meters_to_units;
-    temp[2] = current_eye->pose.Position.y * meters_to_units;
+    QuatToYawPitchRoll(current_eye->orientation, orientation);
+    temp[0] = -current_eye->position.v[0] * meters_to_units; // X
+    temp[1] = -current_eye->position.v[1] * meters_to_units; // Y
+    temp[2] = current_eye->position.v[2] * meters_to_units;  // Z
     Vec3RotateZ(temp, (r_refdef.viewangles[YAW] - orientation[YAW])*M_PI_DIV_180, position);
 
 
@@ -448,7 +556,7 @@ void VR_SetMatrices() {
 void VR_AddOrientationToViewAngles(vec3_t angles)
 {
     vec3_t orientation;
-    QuatToYawPitchRoll(current_eye->pose.Orientation, orientation);
+    QuatToYawPitchRoll(current_eye->orientation, orientation);
 
     angles[PITCH] = angles[PITCH] + orientation[PITCH];
     angles[YAW] = angles[YAW] + orientation[YAW];
