@@ -119,7 +119,7 @@ cvar_t vr_crosshair_size = { "vr_crosshair_size","3.0", CVAR_ARCHIVE };
 cvar_t vr_crosshair_alpha = { "vr_crosshair_alpha","0.25", CVAR_ARCHIVE };
 cvar_t vr_aimmode = { "vr_aimmode","1", CVAR_ARCHIVE };
 cvar_t vr_deadzone = { "vr_deadzone","30",CVAR_ARCHIVE };
-cvar_t vr_perfhud = { "vr_perfhud", "0", CVAR_ARCHIVE };
+cvar_t vr_trackingspace = { "vr_trackingspace", "0", CVAR_ARCHIVE };
 
 
 static qboolean InitOpenGLExtensions()
@@ -265,6 +265,11 @@ static void VR_Deadzone_f(cvar_t *var)
         Cvar_SetValueQuick(&vr_deadzone, deadzone);
 }
 
+static void VR_TrackingSpace_f(cvar_t *var)
+{
+    VR_SetTrackingSpace(var->value);
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -282,7 +287,8 @@ void VID_VR_Init()
     Cvar_RegisterVariable(&vr_aimmode);
     Cvar_RegisterVariable(&vr_deadzone);
     Cvar_SetCallback(&vr_deadzone, VR_Deadzone_f);
-    Cvar_RegisterVariable(&vr_perfhud);
+    Cvar_RegisterVariable(&vr_trackingspace);
+    Cvar_SetCallback(&vr_trackingspace, VR_TrackingSpace_f);
 
     VR_Menu_Init();
 
@@ -312,35 +318,24 @@ qboolean VR_Enable()
         return false;
     }
 
-    // TODO: this is likely useless if we're just gonna use the righteye texture
-    glGenTextures(1, &mirror_texture);
-    glBindTexture(GL_TEXTURE_2D, mirror_texture);
-
-    glGenFramebuffersEXT(1, &mirror_fbo);
-    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, mirror_fbo);
-
-    glFramebufferTexture2DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, mirror_texture, 0);
-    glFramebufferRenderbufferEXT(GL_READ_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT, 0);
-    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
-
     eyes[0].eye = Eye_Left;
     eyes[1].eye = Eye_Right;
-
-    // TODO: Remove this once the real mirror is working
-    IVRCompositor_ShowMirrorWindow(VRCompositor());
 
     for (int i = 0; i < 2; i++) {
         uint32_t vrwidth, vrheight;
         float LeftTan, RightTan, UpTan, DownTan;
 
         IVRSystem_GetRecommendedRenderTargetSize(ovrHMD, &vrwidth, &vrheight);
-        IVRSystem_GetProjectionRaw(ovrHMD, eyes[0].eye, &LeftTan, &RightTan, &UpTan, &DownTan); // TODO: Not 100% sure these are actually tangent values
+        IVRSystem_GetProjectionRaw(ovrHMD, eyes[i].eye, &LeftTan, &RightTan, &UpTan, &DownTan);
 
         eyes[i].index = i;
         eyes[i].fbo = CreateFBO(vrwidth, vrheight);
-        eyes[i].fov_x = (atan(LeftTan) + atan(RightTan)) / M_PI_DIV_180;
-        eyes[i].fov_y = (atan(UpTan) + atan(DownTan)) / M_PI_DIV_180;
+        eyes[i].fov_x = (atan(-LeftTan) + atan(RightTan)) / M_PI_DIV_180;
+        eyes[i].fov_y = (atan(-UpTan) + atan(DownTan)) / M_PI_DIV_180;
     }
+
+    VR_SetTrackingSpace(0);    // Put us into seated tracking position
+    VR_ResetOrientation();  // Recenter the HMD
 
     wglSwapIntervalEXT(0); // Disable V-Sync
 
@@ -359,8 +354,6 @@ void VID_VR_Disable()
     int i;
     if (!vr_initialized)
         return;
-
-    IVRCompositor_HideMirrorWindow(VRCompositor());
 
     VR_Shutdown();
     ovrHMD = NULL;
@@ -442,8 +435,7 @@ void VR_UpdateScreenContent()
         }
     }
 
-    // TODO: verify this works
-    QuatToYawPitchRoll(eyes[0].orientation, orientation);
+    QuatToYawPitchRoll(eyes[1].orientation, orientation);
     switch ((int)vr_aimmode.value)
     {
         // 1: (Default) Head Aiming; View YAW is mouse+head, PITCH is head
@@ -506,13 +498,14 @@ void VR_UpdateScreenContent()
     VectorCopy(cl.viewangles, r_refdef.viewangles);
     VectorCopy(cl.aimangles, r_refdef.aimangles);
 
-
+    // TODO: add correct eye persepctive
     // Render the scene for each eye into their FBOs
     for (i = 0; i < 2; i++) {
         current_eye = &eyes[i];
         RenderScreenForCurrentEye_OVR();
     }
 
+    // TODO: Correct mirror cropping
     // Blit mirror texture to backbuffer
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[1].fbo.framebuffer);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
@@ -529,9 +522,9 @@ void VR_SetMatrices() {
 
     // We need to scale the view offset position to quake units and rotate it by the current input angles (viewangle - eye orientation)
     QuatToYawPitchRoll(current_eye->orientation, orientation);
-    temp[0] = -current_eye->position.v[0] * meters_to_units; // X
-    temp[1] = -current_eye->position.v[1] * meters_to_units; // Y
-    temp[2] = current_eye->position.v[2] * meters_to_units;  // Z
+    temp[0] = -current_eye->position.v[2] * meters_to_units; // X
+    temp[1] = -current_eye->position.v[0] * meters_to_units; // Y
+    temp[2] = current_eye->position.v[1] * meters_to_units;  // Z
     Vec3RotateZ(temp, (r_refdef.viewangles[YAW] - orientation[YAW])*M_PI_DIV_180, position);
 
 
@@ -774,4 +767,10 @@ void VR_ResetOrientation()
         IVRSystem_ResetSeatedZeroPose(ovrHMD);
         VectorCopy(cl.aimangles, lastAim);
     }
+}
+
+void VR_SetTrackingSpace(int n)
+{
+    if ( n >= 0 || n < 3 )
+        IVRCompositor_SetTrackingSpace(VRCompositor(), n);
 }

@@ -9,7 +9,6 @@ extern cvar_t vr_crosshair_size;
 extern cvar_t vr_crosshair_alpha;
 extern cvar_t vr_aimmode;
 extern cvar_t vr_deadzone;
-extern cvar_t vr_perfhud;
 
 static int	vr_options_cursor = 0;
 
@@ -46,13 +45,13 @@ static void VR_MenuPrintOptionValue(int cx, int cy, int option)
 		case VR_OPTION_ENABLED:
 			M_DrawCheckbox( cx, cy, (int)vr_enabled.value );
 			break;
-		case VR_OPTION_PERFHUD:
+		/*case VR_OPTION_PERFHUD:
 			if (vr_perfhud.value == 1) value_string = "Latency Timing";
 			else if (vr_perfhud.value == 2) value_string = "Render Timing";
 			else if (vr_perfhud.value == 3) value_string = "Perf Headroom";
 			else if (vr_perfhud.value == 4) value_string = "Version Info";
 			else value_string = "off";
-			break;
+			break;*/
 		case VR_OPTION_AIMMODE:
 			switch ( (int)vr_aimmode.value ) {
 				case VR_AIMMODE_HEAD_MYAW:
@@ -149,11 +148,11 @@ static void VR_MenuKeyOption(int key, int option)
 				VR_MenuPlaySound( "items/r_item2.wav", 0.5 );
 			}
 			break;
-		case VR_OPTION_PERFHUD:
+		/*case VR_OPTION_PERFHUD:
 			intValue = (int)vr_perfhud.value;
 			intValue = CLAMP( debug[0], isLeft ? intValue - 1 : intValue + 1, debug[_maxarray( debug )] );
 			Cvar_SetValue( "vr_perfhud", intValue );
-			break;
+			break;*/
 		case VR_OPTION_AIMMODE:
 			intValue = (int)vr_aimmode.value;
 			intValue = CLAMP( aimmode[0], isLeft ? intValue - 1 : intValue + 1, _sizeofarray( aimmode ) );
@@ -266,10 +265,10 @@ static void VR_MenuDraw (void)
 				M_Print( 16, y, "            VR Enabled" );
 				VR_MenuPrintOptionValue( 220, y, i );
 				break;
-			case VR_OPTION_PERFHUD:
+			/*case VR_OPTION_PERFHUD:
 				M_Print( 16, y, "             Debug HMD" );
 				VR_MenuPrintOptionValue( 220, y, i );
-				break;
+				break;*/
 			case VR_OPTION_AIMMODE:
 				y += 4; // separation
 				M_Print( 16, y, "              Aim Mode" );

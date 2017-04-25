@@ -29,5 +29,6 @@ void VR_AddOrientationToViewAngles(vec3_t angles);
 void VR_SetAngles(vec3_t angles);
 void VR_ResetOrientation();
 void VR_SetMatrices();
+void VR_SetTrackingSpace(int n);
 
 #endif
