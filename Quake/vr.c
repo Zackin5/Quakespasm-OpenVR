@@ -216,6 +216,16 @@ HmdMatrix44_t TransposeMatrix(HmdMatrix44_t in) {
     return out;
 }
 
+HmdVector3_t AddVectors(HmdVector3_t a, HmdVector3_t b)
+{
+    HmdVector3_t out;
+    out.v[0] = a.v[0] + b.v[0];
+    out.v[1] = a.v[1] + b.v[1];
+    out.v[2] = a.v[2] + b.v[2];
+
+    return out;
+}
+
 // Following functions nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
 HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) {
     HmdVector3_t vector;
@@ -428,8 +438,18 @@ void VR_UpdateScreenContent()
     {
         if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD)
         {
-            eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            /*eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
             eyes[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[0].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[1].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);*/
+
+            // TODO: add correct eye persepctive
+            HmdVector3_t headPos = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            HmdVector3_t leyePos = Matrix34ToVector(IVRSystem_GetEyeToHeadTransform(ovrHMD, eyes[0].eye));
+            HmdVector3_t reyePos = Matrix34ToVector(IVRSystem_GetEyeToHeadTransform(ovrHMD, eyes[1].eye));
+
+            eyes[0].position = AddVectors(headPos, leyePos);
+            eyes[1].position = AddVectors(headPos, reyePos);
             eyes[0].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
             eyes[1].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
         }
@@ -498,7 +518,6 @@ void VR_UpdateScreenContent()
     VectorCopy(cl.viewangles, r_refdef.viewangles);
     VectorCopy(cl.aimangles, r_refdef.aimangles);
 
-    // TODO: add correct eye persepctive
     // Render the scene for each eye into their FBOs
     for (i = 0; i < 2; i++) {
         current_eye = &eyes[i];
