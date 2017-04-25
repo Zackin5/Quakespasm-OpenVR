@@ -143,7 +143,6 @@ static qboolean InitOpenGLExtensions()
 }
 
 fbo_t CreateFBO(int width, int height) {
-    int i;
     fbo_t fbo;
     int swap_chain_length = 0;
 
@@ -166,7 +165,7 @@ fbo_t CreateFBO(int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_INT, NULL);
 
     return fbo;
 }
@@ -300,8 +299,6 @@ void VID_VR_Init()
 
 qboolean VR_Enable()
 {
-    int mirror_texture_id = 0;
-
     EVRInitError eInit = VRInitError_None;
     ovrHMD = VR_Init(&eInit, VRApplication_Scene);
 
@@ -315,20 +312,21 @@ qboolean VR_Enable()
         return false;
     }
 
-    // TODO: dunno if this does anything
+    // TODO: this is likely useless if we're just gonna use the righteye texture
     glGenTextures(1, &mirror_texture);
     glBindTexture(GL_TEXTURE_2D, mirror_texture);
 
     glGenFramebuffersEXT(1, &mirror_fbo);
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, mirror_fbo);
 
-    glFramebufferTexture2DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, mirror_texture_id, 0);
+    glFramebufferTexture2DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, mirror_texture, 0);
     glFramebufferRenderbufferEXT(GL_READ_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT, 0);
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
 
     eyes[0].eye = Eye_Left;
     eyes[1].eye = Eye_Right;
 
+    // TODO: Remove this once the real mirror is working
     IVRCompositor_ShowMirrorWindow(VRCompositor());
 
     for (int i = 0; i < 2; i++) {
@@ -374,9 +372,6 @@ void VID_VR_Disable()
 
 static void RenderScreenForCurrentEye_OVR()
 {
-    int swap_index = 0;
-    int swap_texture_id = 0;
-
     // Remember the current glwidht/height; we have to modify it here for each eye
     int oldglheight = glheight;
     int oldglwidth = glwidth;
@@ -401,9 +396,11 @@ static void RenderScreenForCurrentEye_OVR()
     SCR_UpdateScreenContent();
 
     // Generate the eye texture and send it to the HMD
-    Texture_t eyeTexture = { (void*)(uintptr_t)current_eye->fbo.texture, TextureType_OpenGL, ColorSpace_Gamma };
-
+    // DEBUG: we're trying both the framebuffer and the collour texture 'casue stuff ain't workin'
+    Texture_t eyeTexture = { (void*)current_eye->fbo.texture, TextureType_OpenGL, ColorSpace_Gamma };
     IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture);
+    
+
 
     // Reset
     glwidth = oldglwidth;
@@ -430,7 +427,22 @@ void VR_UpdateScreenContent()
     w = glwidth;
     h = glheight;
 
-    // TODO: actually make this correct??
+    // Update poses
+    IVRCompositor_WaitGetPoses(VRCompositor(), ovr_DevicePose, k_unMaxTrackedDeviceCount, NULL, 0);
+
+    // Get the HMD orientation and position
+    for (int iDevice = 0; iDevice < k_unMaxTrackedDeviceCount; iDevice++)
+    {
+        if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD)
+        {
+            eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[0].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[1].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
+        }
+    }
+
+    // TODO: verify this works
     QuatToYawPitchRoll(eyes[0].orientation, orientation);
     switch ((int)vr_aimmode.value)
     {
@@ -494,17 +506,6 @@ void VR_UpdateScreenContent()
     VectorCopy(cl.viewangles, r_refdef.viewangles);
     VectorCopy(cl.aimangles, r_refdef.aimangles);
 
-    // Get the HMD orientation
-    IVRCompositor_WaitGetPoses(VRCompositor(), ovr_DevicePose, k_unMaxTrackedDeviceCount, NULL, 0);
-
-    for (int iDevice = 0; iDevice < k_unMaxTrackedDeviceCount; iDevice++)
-    {
-        if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD )
-        {
-            eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-            eyes[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-        }
-    }
 
     // Render the scene for each eye into their FBOs
     for (i = 0; i < 2; i++) {
@@ -513,12 +514,10 @@ void VR_UpdateScreenContent()
     }
 
     // Blit mirror texture to backbuffer
-    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, mirror_fbo);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[1].fbo.framebuffer);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
     glBlitFramebufferEXT(0, h, w, 0, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
-
-
 }
 
 void VR_SetMatrices() {
