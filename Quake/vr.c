@@ -235,8 +235,8 @@ HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
     u.v[0] = q.x;
     u.v[1] = q.y;
     u.v[2] = q.z;
-
     float s = q.w;
+
     // Dot products of u,v and u,u
     float uvDot = (u.v[0] * v.v[0] + u.v[1] * v.v[1] + u.v[2] * v.v[2]);
     float uuDot = (u.v[0] * u.v[0] + u.v[1] * u.v[1] + u.v[2] * u.v[2]);
@@ -458,7 +458,6 @@ static void RenderScreenForCurrentEye_OVR()
     IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture);
     
 
-
     // Reset
     glwidth = oldglwidth;
     glheight = oldglheight;
@@ -492,7 +491,6 @@ void VR_UpdateScreenContent()
     {
         if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD)
         {
-            // TODO: add correct eye persepctive
             HmdVector3_t headPos = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
             HmdQuaternion_t headQuat = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
             HmdVector3_t leyePos = Matrix34ToVector(IVRSystem_GetEyeToHeadTransform(ovrHMD, eyes[0].eye));
@@ -579,9 +577,9 @@ void VR_UpdateScreenContent()
 
     // TODO: Correct mirror cropping
     // Blit mirror texture to backbuffer
-    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[1].fbo.framebuffer);
+    glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[0].fbo.framebuffer);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
-    glBlitFramebufferEXT(0, h, w, 0, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBlitFramebufferEXT(0, eyes[1].fbo.size.height, eyes[1].fbo.size.width, 0, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
 }
 
