@@ -459,7 +459,6 @@ static void RenderScreenForCurrentEye_OVR()
     SCR_UpdateScreenContent();
 
     // Generate the eye texture and send it to the HMD
-    // DEBUG: we're trying both the framebuffer and the collour texture 'casue stuff ain't workin'
     Texture_t eyeTexture = { (void*)current_eye->fbo.texture, TextureType_OpenGL, ColorSpace_Gamma };
     IVRCompositor_Submit(VRCompositor(), current_eye->eye, &eyeTexture);
     
