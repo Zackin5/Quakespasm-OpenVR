@@ -69,6 +69,7 @@ extern	int			in_forward, in_forward2, in_back;
 vec3_t	v_punchangles[2]; //johnfitz -- copied from cl.punchangle.  0 is current, 1 is previous value. never the same unless map just loaded
 
 extern cvar_t vr_enabled;
+extern cvar_t vr_viewkick;
 
 /*
 ===============
@@ -89,7 +90,12 @@ float V_CalcRoll (vec3_t angles, vec3_t velocity)
 	sign = side < 0 ? -1 : 1;
 	side = fabs(side);
 
-	value = cl_rollangle.value;
+    // Don't roll view in VR
+    if (vr_enabled.value)
+        value = 0;
+    else
+	    value = cl_rollangle.value;
+
 //	if (cl.inwater)
 //		value *= 6;
 
@@ -112,6 +118,10 @@ float V_CalcBob (void)
 {
 	float	bob;
 	float	cycle;
+
+    // Don't bob if we're in VR
+    if (vr_enabled.value)
+        return 0.f;
 
 	cycle = cl.time - (int)(cl.time/cl_bobcycle.value)*cl_bobcycle.value;
 	cycle /= cl_bobcycle.value;
@@ -315,20 +325,24 @@ void V_ParseDamage (void)
 //
 // calculate view angle kicks
 //
-	ent = &cl_entities[cl.viewentity];
+    // check if we're out of vr or if vr viewkick is enabled
+    if(!vr_enabled.value || (vr_enabled.value && vr_viewkick.value) )
+    {
+        ent = &cl_entities[cl.viewentity];
 
-	VectorSubtract (from, ent->origin, from);
-	VectorNormalize (from);
+        VectorSubtract(from, ent->origin, from);
+        VectorNormalize(from);
 
-	AngleVectors (ent->angles, forward, right, up);
+        AngleVectors(ent->angles, forward, right, up);
 
-	side = DotProduct (from, right);
-	v_dmg_roll = count*side*v_kickroll.value;
+        side = DotProduct(from, right);
+        v_dmg_roll = count*side*v_kickroll.value;
 
-	side = DotProduct (from, forward);
-	v_dmg_pitch = count*side*v_kickpitch.value;
+        side = DotProduct(from, forward);
+        v_dmg_pitch = count*side*v_kickpitch.value;
 
-	v_dmg_time = v_kicktime.value;
+        v_dmg_time = v_kicktime.value;
+    }
 }
 
 
@@ -810,10 +824,16 @@ void V_CalcRefdef (void)
 	view->frame = cl.stats[STAT_WEAPONFRAME];
 	view->colormap = vid.colormap;
 
+//zackin5 -- disable viewkick in vr
+    bool vrDisableKick = false;
+
+    if (vr_enabled.value && !vr_viewkick.value)
+        vrDisableKick = true;
+
 //johnfitz -- v_gunkick
-	if (v_gunkick.value == 1) //original quake kick
+	if (v_gunkick.value == 1 && !vrDisableKick) //original quake kick
 		VectorAdd (r_refdef.viewangles, cl.punchangle, r_refdef.viewangles);
-	if (v_gunkick.value == 2) //lerped kick
+	if (v_gunkick.value == 2 && !vrDisableKick) //lerped kick
 	{
 		for (i=0; i<3; i++)
 			if (punch[i] != v_punchangles[0][i])

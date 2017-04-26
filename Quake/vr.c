@@ -120,6 +120,7 @@ cvar_t vr_crosshair_alpha = { "vr_crosshair_alpha","0.25", CVAR_ARCHIVE };
 cvar_t vr_aimmode = { "vr_aimmode","1", CVAR_ARCHIVE };
 cvar_t vr_deadzone = { "vr_deadzone","30",CVAR_ARCHIVE };
 cvar_t vr_trackingspace = { "vr_trackingspace", "0", CVAR_ARCHIVE };
+cvar_t vr_viewkick = { "vr_viewkick", "0", CVAR_NONE };
 
 
 static qboolean InitOpenGLExtensions()
@@ -354,6 +355,9 @@ void VID_VR_Init()
     Cvar_RegisterVariable(&vr_trackingspace);
     Cvar_SetCallback(&vr_trackingspace, VR_TrackingSpace_f);
 
+    // Sickness stuff
+    Cvar_RegisterVariable(&vr_viewkick);
+
     VR_Menu_Init();
 
     // Set the cvar if invoked from a command line parameter
@@ -399,9 +403,11 @@ qboolean VR_Enable()
     }
 
     VR_SetTrackingSpace(0);    // Put us into seated tracking position
-    VR_ResetOrientation();  // Recenter the HMD
+    VR_ResetOrientation();     // Recenter the HMD
 
     wglSwapIntervalEXT(0); // Disable V-Sync
+
+    Cbuf_AddText ("exec vr_autoexec.cfg\n"); // Load the vr autosec config file incase the user has settings they want
 
     attempt_to_refocus_retry = 900; // Try to refocus our for the first 900 frames :/
     vr_initialized = true;
@@ -575,11 +581,10 @@ void VR_UpdateScreenContent()
         RenderScreenForCurrentEye_OVR();
     }
 
-    // TODO: Correct mirror cropping
     // Blit mirror texture to backbuffer
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[0].fbo.framebuffer);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
-    glBlitFramebufferEXT(0, eyes[1].fbo.size.height, eyes[1].fbo.size.width, 0, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBlitFramebufferEXT(0, eyes[0].fbo.size.height, eyes[0].fbo.size.width, 0, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, 0);
 }
 
