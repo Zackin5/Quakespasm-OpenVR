@@ -219,6 +219,7 @@ HmdMatrix44_t TransposeMatrix(HmdMatrix44_t in) {
 HmdVector3_t AddVectors(HmdVector3_t a, HmdVector3_t b)
 {
     HmdVector3_t out;
+
     out.v[0] = a.v[0] + b.v[0];
     out.v[1] = a.v[1] + b.v[1];
     out.v[2] = a.v[2] + b.v[2];
@@ -226,8 +227,62 @@ HmdVector3_t AddVectors(HmdVector3_t a, HmdVector3_t b)
     return out;
 }
 
-// Following functions nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
-HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) {
+// Rotates a vector by a quaternion and returns the results
+// Based on function from https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
+{
+    HmdVector3_t u, result;
+    u.v[0] = q.x;
+    u.v[1] = q.y;
+    u.v[2] = q.z;
+
+    // 2 x
+    // 0 y
+    // 1 z
+
+    float s = q.w;
+    // Dot products of u,v and u,u
+    float uvDot = (u.v[0] * v.v[0] + u.v[1] * v.v[1] + u.v[2] * v.v[2]);
+    float uuDot = (u.v[0] * u.v[0] + u.v[1] * u.v[1] + u.v[2] * u.v[2]);
+
+    // Calculate cross product of u, v
+    HmdVector3_t uvCross;
+    uvCross.v[0] = u.v[1] * v.v[2] - u.v[2] * v.v[1];
+    uvCross.v[1] = u.v[2] * v.v[0] - u.v[0] * v.v[2];
+    uvCross.v[2] = u.v[0] * v.v[1] - u.v[1] * v.v[0];
+    
+    // Calculate each vectors' result individually because there aren't arthimetic functions for HmdVector3_t dsahfkldhsaklfhklsadh
+    result.v[0] = u.v[0] * 2.0f * uvDot
+                + (s*s - uuDot) * v.v[0]
+                + 2.0f * s * uvCross.v[0];
+    result.v[1] = u.v[1] * 2.0f * uvDot
+                + (s*s - uuDot) * v.v[1]
+                + 2.0f * s * uvCross.v[1];
+    result.v[2] = u.v[1] * 2.0f * uvDot
+                + (s*s - uuDot) * v.v[1]
+                + 2.0f * s * uvCross.v[1];
+
+    return result;
+}
+
+// Multiplies quaternion a by quaternion b and returns the result
+// Function borrowed from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/
+HmdQuaternion_t MultiplyQuaternion(HmdQuaternion_t a, HmdQuaternion_t b)
+{
+    HmdQuaternion_t final;
+
+    final.x =  a.x * b.w + a.y * b.z - a.z * b.y + a.w * b.x;
+    final.y = -a.x * b.z + a.y * b.w + a.z * b.x + a.w * b.y;
+    final.z =  a.x * b.y - a.y * b.x + a.z * b.w + a.w * b.z;
+    final.w = -a.x * b.x - a.y * b.y - a.z * b.z + a.w * b.w;
+
+    return final;
+}
+
+// Transforms a HMD Matrix34 to a Vector3
+// Function logic nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
+HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) 
+{
     HmdVector3_t vector;
 
     vector.v[0] = in.m[0][3];
@@ -237,7 +292,10 @@ HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) {
     return vector;
 }
 
-HmdQuaternion_t Matrix34ToQuaternation(HmdMatrix34_t in) {
+// Transforms a HMD Matrix34 to a Quaternion
+// Function logic nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
+HmdQuaternion_t Matrix34ToQuaternion(HmdMatrix34_t in) 
+{
     HmdQuaternion_t q;
 
     q.w = sqrt(fmax(0, 1 + in.m[0][0] + in.m[1][1] + in.m[2][2])) / 2;
@@ -438,20 +496,19 @@ void VR_UpdateScreenContent()
     {
         if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD)
         {
-            /*eyes[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-            eyes[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-            eyes[0].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
-            eyes[1].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);*/
-
             // TODO: add correct eye persepctive
             HmdVector3_t headPos = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            HmdQuaternion_t headQuat = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
             HmdVector3_t leyePos = Matrix34ToVector(IVRSystem_GetEyeToHeadTransform(ovrHMD, eyes[0].eye));
             HmdVector3_t reyePos = Matrix34ToVector(IVRSystem_GetEyeToHeadTransform(ovrHMD, eyes[1].eye));
 
+            leyePos = RotateVectorByQuaternion(leyePos, headQuat);
+            reyePos = RotateVectorByQuaternion(reyePos, headQuat);
+
             eyes[0].position = AddVectors(headPos, leyePos);
             eyes[1].position = AddVectors(headPos, reyePos);
-            eyes[0].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
-            eyes[1].orientation = Matrix34ToQuaternation(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            eyes[0].orientation = headQuat;
+            eyes[1].orientation = headQuat;
         }
     }
 
