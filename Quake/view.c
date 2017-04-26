@@ -824,16 +824,10 @@ void V_CalcRefdef (void)
 	view->frame = cl.stats[STAT_WEAPONFRAME];
 	view->colormap = vid.colormap;
 
-//zackin5 -- disable viewkick in vr
-    bool vrDisableKick = false;
-
-    if (vr_enabled.value && !vr_viewkick.value)
-        vrDisableKick = true;
-
 //johnfitz -- v_gunkick
-	if (v_gunkick.value == 1 && !vrDisableKick) //original quake kick
+	if (v_gunkick.value == 1 && !(vr_enabled.value && !vr_viewkick.value)) //original quake kick
 		VectorAdd (r_refdef.viewangles, cl.punchangle, r_refdef.viewangles);
-	if (v_gunkick.value == 2 && !vrDisableKick) //lerped kick
+	if (v_gunkick.value == 2 && !(vr_enabled.value && !vr_viewkick.value)) //lerped kick
 	{
 		for (i=0; i<3; i++)
 			if (punch[i] != v_punchangles[0][i])
