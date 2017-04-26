@@ -236,10 +236,6 @@ HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
     u.v[1] = q.y;
     u.v[2] = q.z;
 
-    // 2 x
-    // 0 y
-    // 1 z
-
     float s = q.w;
     // Dot products of u,v and u,u
     float uvDot = (u.v[0] * v.v[0] + u.v[1] * v.v[1] + u.v[2] * v.v[2]);
@@ -258,9 +254,9 @@ HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
     result.v[1] = u.v[1] * 2.0f * uvDot
                 + (s*s - uuDot) * v.v[1]
                 + 2.0f * s * uvCross.v[1];
-    result.v[2] = u.v[1] * 2.0f * uvDot
-                + (s*s - uuDot) * v.v[1]
-                + 2.0f * s * uvCross.v[1];
+    result.v[2] = u.v[2] * 2.0f * uvDot
+                + (s*s - uuDot) * v.v[2]
+                + 2.0f * s * uvCross.v[2];
 
     return result;
 }
