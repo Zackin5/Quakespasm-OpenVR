@@ -34,6 +34,11 @@ typedef struct {
     float fov_x, fov_y;
 } vr_eye_t;
 
+typedef struct {
+    HmdVector3_t position;
+    HmdQuaternion_t orientation;
+} vr_controller;
+
 // OpenGL Extensions
 #define GL_READ_FRAMEBUFFER_EXT 0x8CA8
 #define GL_DRAW_FRAMEBUFFER_EXT 0x8CA9
@@ -93,6 +98,7 @@ TrackedDevicePose_t ovr_DevicePose[16]; //k_unMaxTrackedDeviceCount
 
 static vr_eye_t eyes[2];
 static vr_eye_t *current_eye = NULL;
+static vr_controller controllers[2];
 static vec3_t lastOrientation = { 0, 0, 0 };
 static vec3_t lastAim = { 0, 0, 0 };
 
@@ -483,9 +489,10 @@ void VR_UpdateScreenContent()
     // Update poses
     IVRCompositor_WaitGetPoses(VRCompositor(), ovr_DevicePose, k_unMaxTrackedDeviceCount, NULL, 0);
 
-    // Get the HMD orientation and position
+    // Get the VR devices' orientation and position
     for (int iDevice = 0; iDevice < k_unMaxTrackedDeviceCount; iDevice++)
     {
+        // HMD vectors update
         if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_HMD)
         {
             HmdVector3_t headPos = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
@@ -501,9 +508,20 @@ void VR_UpdateScreenContent()
             eyes[0].orientation = headQuat;
             eyes[1].orientation = headQuat;
         }
+        // Controller vectors update
         else if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_Controller)
         {
-            // TODO: Controller tracking logic
+            // TODO: Verify controller tracking logic
+            if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_LeftHand)
+            {
+                controllers[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+                controllers[0].orientation = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            }
+            else if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_RightHand)
+            {
+                controllers[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
+                controllers[1].orientation = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
+            }
         }
     }
 
@@ -564,10 +582,16 @@ void VR_UpdateScreenContent()
 
         // 7: Controller Aiming
     case VR_AIMMODE_CONTROLLER:
+
+        // TODO: verify logic
         cl.viewangles[PITCH] = orientation[PITCH];
         cl.viewangles[YAW] = orientation[YAW];
 
-        // TODO: set aimanlge to controller values
+        QuatToYawPitchRoll(controllers[0].orientation, controller_orientation[0]);
+        QuatToYawPitchRoll(controllers[1].orientation, controller_orientation[1]);
+
+        cl.aimangles[PITCH] = controller_orientation[1][PITCH];
+        cl.aimangles[YAW] = controller_orientation[1][YAW];
         break;
     }
     cl.viewangles[ROLL] = orientation[ROLL];
