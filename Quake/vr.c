@@ -119,7 +119,6 @@ cvar_t vr_crosshair_size = { "vr_crosshair_size","3.0", CVAR_ARCHIVE };
 cvar_t vr_crosshair_alpha = { "vr_crosshair_alpha","0.25", CVAR_ARCHIVE };
 cvar_t vr_aimmode = { "vr_aimmode","1", CVAR_ARCHIVE };
 cvar_t vr_deadzone = { "vr_deadzone","30",CVAR_ARCHIVE };
-cvar_t vr_trackingspace = { "vr_trackingspace", "0", CVAR_ARCHIVE };
 cvar_t vr_viewkick = { "vr_viewkick", "0", CVAR_NONE };
 
 
@@ -229,7 +228,7 @@ HmdVector3_t AddVectors(HmdVector3_t a, HmdVector3_t b)
 }
 
 // Rotates a vector by a quaternion and returns the results
-// Based on function from https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+// Based on math from https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
 HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
 {
     HmdVector3_t u, result;
@@ -263,7 +262,7 @@ HmdVector3_t RotateVectorByQuaternion(HmdVector3_t v, HmdQuaternion_t q)
 }
 
 // Multiplies quaternion a by quaternion b and returns the result
-// Function borrowed from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/
+// Math borrowed from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/code/
 HmdQuaternion_t MultiplyQuaternion(HmdQuaternion_t a, HmdQuaternion_t b)
 {
     HmdQuaternion_t final;
@@ -277,7 +276,7 @@ HmdQuaternion_t MultiplyQuaternion(HmdQuaternion_t a, HmdQuaternion_t b)
 }
 
 // Transforms a HMD Matrix34 to a Vector3
-// Function logic nicked from https://github.com/Omnifinity/OpenVR-Tracking-Example
+// Math borrowed from https://github.com/Omnifinity/OpenVR-Tracking-Example
 HmdVector3_t Matrix34ToVector(HmdMatrix34_t in) 
 {
     HmdVector3_t vector;
@@ -330,11 +329,6 @@ static void VR_Deadzone_f(cvar_t *var)
         Cvar_SetValueQuick(&vr_deadzone, deadzone);
 }
 
-static void VR_TrackingSpace_f(cvar_t *var)
-{
-    VR_SetTrackingSpace(var->value);
-}
-
 
 
 // ----------------------------------------------------------------------------
@@ -352,8 +346,6 @@ void VID_VR_Init()
     Cvar_RegisterVariable(&vr_aimmode);
     Cvar_RegisterVariable(&vr_deadzone);
     Cvar_SetCallback(&vr_deadzone, VR_Deadzone_f);
-    Cvar_RegisterVariable(&vr_trackingspace);
-    Cvar_SetCallback(&vr_trackingspace, VR_TrackingSpace_f);
 
     // Sickness stuff
     Cvar_RegisterVariable(&vr_viewkick);
@@ -475,7 +467,7 @@ static void RenderScreenForCurrentEye_OVR()
 void VR_UpdateScreenContent()
 {
     int i;
-    vec3_t orientation;
+    vec3_t orientation, controller_orientation[2];
     GLint w, h;
 
     // Last chance to enable VR Mode - we get here when the game already start up with vr_enabled 1
@@ -508,6 +500,10 @@ void VR_UpdateScreenContent()
             eyes[1].position = AddVectors(headPos, reyePos);
             eyes[0].orientation = headQuat;
             eyes[1].orientation = headQuat;
+        }
+        else if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_Controller)
+        {
+            // TODO: Controller tracking logic
         }
     }
 
@@ -565,6 +561,14 @@ void VR_UpdateScreenContent()
         cl.viewangles[PITCH] = orientation[PITCH];
     }
     break;
+
+        // 7: Controller Aiming
+    case VR_AIMMODE_CONTROLLER:
+        cl.viewangles[PITCH] = orientation[PITCH];
+        cl.viewangles[YAW] = orientation[YAW];
+
+        // TODO: set aimanlge to controller values
+        break;
     }
     cl.viewangles[ROLL] = orientation[ROLL];
 
@@ -808,6 +812,8 @@ void VR_DrawSbar()
 
         if (vr_aimmode.value == VR_AIMMODE_HEAD_MYAW || vr_aimmode.value == VR_AIMMODE_HEAD_MYAW_MPITCH)
             sbar_angles[PITCH] = 0;
+
+    // TODO: bind to controller logic
 
     AngleVectors(sbar_angles, forward, right, up);
 

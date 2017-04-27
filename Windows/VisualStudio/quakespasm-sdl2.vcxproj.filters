@@ -243,9 +243,6 @@
     <ClCompile Include="..\..\Quake\vr_menu.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Quake\vr_oculus.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\Quake\vr.c">
       <Filter>Source Files</Filter>
     </ClCompile>
