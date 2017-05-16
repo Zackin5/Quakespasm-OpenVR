@@ -69,6 +69,7 @@ extern	int			in_forward, in_forward2, in_back;
 vec3_t	v_punchangles[2]; //johnfitz -- copied from cl.punchangle.  0 is current, 1 is previous value. never the same unless map just loaded
 
 extern cvar_t vr_enabled;
+extern cvar_t vr_aimmode;
 extern cvar_t vr_viewkick;
 
 /*
@@ -633,12 +634,21 @@ void CalcGunAngle (void)
 	oldyaw = yaw;
 	oldpitch = pitch;
 
-	cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
-	cl.viewent.angles[PITCH] = - (r_refdef.aimangles[PITCH] + pitch);
+    if (vr_enabled.value)
+    {
+        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
+        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH] + pitch);
+        cl.viewent.angles[ROLL] = r_refdef.aimangles[ROLL];
+    }
+    else
+    {
+        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
+        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH] + pitch);
 
-	cl.viewent.angles[ROLL] -= v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
-	cl.viewent.angles[PITCH] -= v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
-	cl.viewent.angles[YAW] -= v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;
+        cl.viewent.angles[ROLL] -= v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
+        cl.viewent.angles[PITCH] -= v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
+        cl.viewent.angles[YAW] -= v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;
+    }
 }
 
 /*
@@ -752,71 +762,84 @@ void V_CalcIntermissionRefdef (void)
 V_CalcRefdef
 ==================
 */
-void V_CalcRefdef (void)
+void V_CalcRefdef(void)
 {
-	entity_t	*ent, *view;
-	int			i;
-	vec3_t		forward, right, up;
-	vec3_t		angles;
-	float		bob;
-	static float oldz = 0;
-	static vec3_t punch = {0,0,0}; //johnfitz -- v_gunkick
-	float delta; //johnfitz -- v_gunkick
+    entity_t	*ent, *view;
+    int			i;
+    vec3_t		forward, right, up;
+    vec3_t		angles;
+    float		bob;
+    static float oldz = 0;
+    static vec3_t punch = { 0,0,0 }; //johnfitz -- v_gunkick
+    float delta; //johnfitz -- v_gunkick
 
-	V_DriftPitch ();
+    V_DriftPitch();
 
-// ent is the player model (visible when out of body)
-	ent = &cl_entities[cl.viewentity];
-// view is the weapon model (only visible from inside body)
-	view = &cl.viewent;
+    // ent is the player model (visible when out of body)
+    ent = &cl_entities[cl.viewentity];
+    // view is the weapon model (only visible from inside body)
+    view = &cl.viewent;
 
 
-// transform the view offset by the model's matrix to get the offset from
-// model origin for the view
-	ent->angles[YAW] = cl.viewangles[YAW];	// the model should face the view dir
-	ent->angles[PITCH] = -cl.viewangles[PITCH];	// the model should face the view dir
+    // transform the view offset by the model's matrix to get the offset from
+    // model origin for the view
+    ent->angles[YAW] = cl.viewangles[YAW];	// the model should face the view dir
+    ent->angles[PITCH] = -cl.viewangles[PITCH];	// the model should face the view dir
 
-	bob = V_CalcBob ();
+    bob = V_CalcBob();
 
-// refresh position
-	VectorCopy (ent->origin, r_refdef.vieworg);
-	r_refdef.vieworg[2] += cl.viewheight + bob;
+    // refresh position
+    VectorCopy(ent->origin, r_refdef.vieworg);
+    r_refdef.vieworg[2] += cl.viewheight + bob;
 
-// never let it sit exactly on a node line, because a water plane can
-// dissapear when viewed with the eye exactly on it.
-// the server protocol only specifies to 1/16 pixel, so add 1/32 in each axis
-	r_refdef.vieworg[0] += 1.0/32;
-	r_refdef.vieworg[1] += 1.0/32;
-	r_refdef.vieworg[2] += 1.0/32;
+    // never let it sit exactly on a node line, because a water plane can
+    // dissapear when viewed with the eye exactly on it.
+    // the server protocol only specifies to 1/16 pixel, so add 1/32 in each axis
+    r_refdef.vieworg[0] += 1.0 / 32;
+    r_refdef.vieworg[1] += 1.0 / 32;
+    r_refdef.vieworg[2] += 1.0 / 32;
 
-	VectorCopy (cl.viewangles, r_refdef.viewangles);
-	V_CalcViewRoll ();
-	V_AddIdle ();
+    VectorCopy(cl.viewangles, r_refdef.viewangles);
+    V_CalcViewRoll();
+    V_AddIdle();
 
-// offsets
-	angles[PITCH] = -ent->angles[PITCH]; // because entity pitches are actually backward
-	angles[YAW] = ent->angles[YAW];
-	angles[ROLL] = ent->angles[ROLL];
+    // offsets
+    angles[PITCH] = -ent->angles[PITCH]; // because entity pitches are actually backward
+    angles[YAW] = ent->angles[YAW];
+    angles[ROLL] = ent->angles[ROLL];
 
-	AngleVectors (angles, forward, right, up);
+    AngleVectors(angles, forward, right, up);
 
-	if (cl.maxclients <= 1) //johnfitz -- moved cheat-protection here from V_RenderView
-		for (i=0 ; i<3 ; i++)
-			r_refdef.vieworg[i] += scr_ofsx.value*forward[i] + scr_ofsy.value*right[i] + scr_ofsz.value*up[i];
+    if (cl.maxclients <= 1) //johnfitz -- moved cheat-protection here from V_RenderView
+        for (i = 0; i < 3; i++)
+            r_refdef.vieworg[i] += scr_ofsx.value*forward[i] + scr_ofsy.value*right[i] + scr_ofsz.value*up[i];
 
-	V_BoundOffsets ();
+    V_BoundOffsets();
 
-// set up gun position
-	VectorCopy (cl.aimangles, view->angles);
+    // set up gun position
+    VectorCopy(cl.aimangles, view->angles);
 
-	CalcGunAngle ();
+    CalcGunAngle();
 
-	VectorCopy (ent->origin, view->origin);
-	view->origin[2] += cl.viewheight;
+    // VR controller aiming configuration
+    if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
+    {
+        vec3_t finalGunPos;
+        VectorAdd(-cl.aimpos, ent->origin, finalGunPos)
+        VectorCopy(finalGunPos, view->origin)
 
-	for (i=0 ; i<3 ; i++)
-		view->origin[i] += forward[i]*bob*0.4;
-	view->origin[2] += bob;
+        view->origin[2] += cl.viewheight;
+    }
+    else
+    {
+        VectorCopy(ent->origin, view->origin)
+
+        view->origin[2] += cl.viewheight;
+
+        for (i = 0; i<3; i++)
+            view->origin[i] += forward[i] * bob*0.4;
+        view->origin[2] += bob;
+    }
 
 	//johnfitz -- removed all gun position fudging code (was used to keep gun from getting covered by sbar)
 

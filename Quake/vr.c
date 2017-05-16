@@ -35,8 +35,10 @@ typedef struct {
 } vr_eye_t;
 
 typedef struct {
-    HmdVector3_t position;
-    HmdQuaternion_t orientation;
+    vec3_t position;
+    vec3_t orientation;
+    HmdVector3_t rawvector;
+    HmdQuaternion_t raworientation;
 } vr_controller;
 
 // OpenGL Extensions
@@ -126,6 +128,7 @@ cvar_t vr_crosshair_alpha = { "vr_crosshair_alpha","0.25", CVAR_ARCHIVE };
 cvar_t vr_aimmode = { "vr_aimmode","1", CVAR_ARCHIVE };
 cvar_t vr_deadzone = { "vr_deadzone","30",CVAR_ARCHIVE };
 cvar_t vr_viewkick = { "vr_viewkick", "0", CVAR_NONE };
+cvar_t vr_lefthanded = { "vr_lefthanded", "0", CVAR_NONE };
 
 
 static qboolean InitOpenGLExtensions()
@@ -351,6 +354,7 @@ void VID_VR_Init()
     Cvar_RegisterVariable(&vr_crosshair_alpha);
     Cvar_RegisterVariable(&vr_aimmode);
     Cvar_RegisterVariable(&vr_deadzone);
+    Cvar_RegisterVariable(&vr_lefthanded);
     Cvar_SetCallback(&vr_deadzone, VR_Deadzone_f);
 
     // Sickness stuff
@@ -473,7 +477,7 @@ static void RenderScreenForCurrentEye_OVR()
 void VR_UpdateScreenContent()
 {
     int i;
-    vec3_t orientation, controller_orientation[2];
+    vec3_t orientation;
     GLint w, h;
 
     // Last chance to enable VR Mode - we get here when the game already start up with vr_enabled 1
@@ -511,16 +515,52 @@ void VR_UpdateScreenContent()
         // Controller vectors update
         else if (ovr_DevicePose[iDevice].bPoseIsValid && IVRSystem_GetTrackedDeviceClass(ovrHMD, iDevice) == TrackedDeviceClass_Controller)
         {
-            // TODO: Verify controller tracking logic
+            HmdVector3_t rawControllerPos = Matrix34ToVector(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+            HmdQuaternion_t rawControllerQuat = Matrix34ToQuaternion(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+
             if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_LeftHand)
             {
-                controllers[0].position = Matrix34ToVector(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
-                controllers[0].orientation = Matrix34ToQuaternion(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+                if (vr_lefthanded.value == true)
+                {
+                    // Swap controller values for our southpaw players
+                    controllers[1].rawvector = rawControllerPos;
+                    controllers[1].raworientation = rawControllerQuat;
+                    controllers[1].position[0] = rawControllerPos.v[0];
+                    controllers[1].position[1] = rawControllerPos.v[1];
+                    controllers[1].position[2] = rawControllerPos.v[2];
+                    QuatToYawPitchRoll(rawControllerQuat, controllers[1].orientation);
+                }
+                else
+                {
+                    controllers[0].rawvector = rawControllerPos;
+                    controllers[0].raworientation = rawControllerQuat;
+                    controllers[0].position[0] = rawControllerPos.v[2];
+                    controllers[0].position[1] = rawControllerPos.v[0];
+                    controllers[0].position[2] = rawControllerPos.v[1];
+                    QuatToYawPitchRoll(rawControllerQuat, controllers[0].orientation);
+                }
             }
             else if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_RightHand)
             {
-                controllers[1].position = Matrix34ToVector(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
-                controllers[1].orientation = Matrix34ToQuaternion(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+                if (vr_lefthanded.value == true)
+                {
+                    // Swap controller values for our southpaw players
+                    controllers[1].rawvector = rawControllerPos;
+                    controllers[1].raworientation = rawControllerQuat;
+                    controllers[0].position[0] = rawControllerPos.v[2] * meters_to_units;
+                    controllers[0].position[1] = rawControllerPos.v[0] * meters_to_units;
+                    controllers[0].position[2] = rawControllerPos.v[1] * meters_to_units;
+                    QuatToYawPitchRoll(rawControllerQuat, controllers[0].orientation);
+                }
+                else
+                {
+                    controllers[1].rawvector = rawControllerPos;
+                    controllers[1].raworientation = rawControllerQuat;
+                    controllers[1].position[0] = rawControllerPos.v[2] * meters_to_units;
+                    controllers[1].position[1] = rawControllerPos.v[0] * meters_to_units;
+                    controllers[1].position[2] = rawControllerPos.v[1] * meters_to_units;
+                    QuatToYawPitchRoll(rawControllerQuat, controllers[1].orientation);
+                }
             }
         }
     }
@@ -582,16 +622,20 @@ void VR_UpdateScreenContent()
 
         // 7: Controller Aiming
     case VR_AIMMODE_CONTROLLER:
-
-        // TODO: verify logic
+        // TODO: fix logic
         cl.viewangles[PITCH] = orientation[PITCH];
         cl.viewangles[YAW] = orientation[YAW];
 
-        QuatToYawPitchRoll(controllers[0].orientation, controller_orientation[0]);
-        QuatToYawPitchRoll(controllers[1].orientation, controller_orientation[1]);
+        cl.aimangles[PITCH] = controllers[1].orientation[PITCH];
+        cl.aimangles[YAW] = controllers[1].orientation[YAW];
+        cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
-        cl.aimangles[PITCH] = controller_orientation[1][PITCH];
-        cl.aimangles[YAW] = controller_orientation[1][YAW];
+        cl.aimpos[0] = controllers[1].position[0];
+        cl.aimpos[1] = controllers[1].position[1];
+        cl.aimpos[2] = -controllers[1].position[2];
+
+        VectorCopy(cl.aimpos, r_refdef.aimpos);
+        r_refdef.aimroll = cl.aimroll;
         break;
     }
     cl.viewangles[ROLL] = orientation[ROLL];
@@ -836,8 +880,6 @@ void VR_DrawSbar()
 
         if (vr_aimmode.value == VR_AIMMODE_HEAD_MYAW || vr_aimmode.value == VR_AIMMODE_HEAD_MYAW_MPITCH)
             sbar_angles[PITCH] = 0;
-
-    // TODO: bind to controller logic
 
     AngleVectors(sbar_angles, forward, right, up);
 

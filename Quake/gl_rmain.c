@@ -690,9 +690,14 @@ void R_DrawViewModel (void)
 	//johnfitz
 
 	// hack the depth range to prevent view model from poking into walls
-	glDepthRange (0, 0.3);
+    // only when not in VR
+    if(!vr_enabled.value)
+	    glDepthRange (0, 0.3);
+
 	R_DrawAliasModel (currententity);
-	glDepthRange (0, 1);
+
+    if (!vr_enabled.value)
+	    glDepthRange (0, 1);
 }
 
 /*
