@@ -157,3 +157,5 @@ $RECYCLE.BIN/
 
 # Mac crap
 .DS_Store
+/Windows/VisualStudio/id1
+/Windows/VisualStudio/history.txt

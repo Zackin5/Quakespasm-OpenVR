@@ -514,13 +514,13 @@ void VR_UpdateScreenContent()
             // TODO: Verify controller tracking logic
             if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_LeftHand)
             {
-                controllers[0].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-                controllers[0].orientation = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
+                controllers[0].position = Matrix34ToVector(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+                controllers[0].orientation = Matrix34ToQuaternion(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
             }
             else if (IVRSystem_GetControllerRoleForTrackedDeviceIndex(ovrHMD, iDevice) == TrackedControllerRole_RightHand)
             {
-                controllers[1].position = Matrix34ToVector(ovr_DevicePose->mDeviceToAbsoluteTracking);
-                controllers[1].orientation = Matrix34ToQuaternion(ovr_DevicePose->mDeviceToAbsoluteTracking);
+                controllers[1].position = Matrix34ToVector(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
+                controllers[1].orientation = Matrix34ToQuaternion(ovr_DevicePose[iDevice].mDeviceToAbsoluteTracking);
             }
         }
     }
