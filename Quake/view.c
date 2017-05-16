@@ -634,10 +634,10 @@ void CalcGunAngle (void)
 	oldyaw = yaw;
 	oldpitch = pitch;
 
-    if (vr_enabled.value)
+    if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
     {
-        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
-        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH] + pitch);
+        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW];
+        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH]);
         cl.viewent.angles[ROLL] = r_refdef.aimangles[ROLL];
     }
     else
@@ -819,6 +819,7 @@ void V_CalcRefdef(void)
     // set up gun position
     VectorCopy(cl.aimangles, view->angles);
 
+    // TODO: fix broken gun roation
     CalcGunAngle();
 
     // VR controller aiming configuration

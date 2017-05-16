@@ -630,12 +630,14 @@ void VR_UpdateScreenContent()
         cl.aimangles[YAW] = controllers[1].orientation[YAW];
         cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
-        cl.aimpos[0] = controllers[1].position[0];
-        cl.aimpos[1] = controllers[1].position[1];
-        cl.aimpos[2] = -controllers[1].position[2];
+        HmdVector3_t gunOffset = {0.0,5.0,0.0};
+        RotateVectorByQuaternion(gunOffset, controllers[1].raworientation);
+
+        cl.aimpos[0] = controllers[1].position[0] + gunOffset.v[2];
+        cl.aimpos[1] = controllers[1].position[1] + gunOffset.v[0];
+        cl.aimpos[2] = -controllers[1].position[2] - gunOffset.v[1];
 
         VectorCopy(cl.aimpos, r_refdef.aimpos);
-        r_refdef.aimroll = cl.aimroll;
         break;
     }
     cl.viewangles[ROLL] = orientation[ROLL];

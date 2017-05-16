@@ -168,7 +168,6 @@ typedef struct
 
 	vec3_t		aimangles;
     vec3_t      aimpos;
-    vec_t       aimroll;
 
 	vec3_t		mvelocity[2];	// update by server, used for lean+bob
 								// (0 is newest)
