@@ -565,6 +565,9 @@ void VR_UpdateScreenContent()
         }
     }
 
+    // Reset the aim roll value before calculation, incase the user switches aimmode from 7 to another.
+    cl.aimangles[ROLL] = 0.0;
+
     QuatToYawPitchRoll(eyes[1].orientation, orientation);
     switch ((int)vr_aimmode.value)
     {
@@ -630,8 +633,8 @@ void VR_UpdateScreenContent()
         cl.aimangles[YAW] = controllers[1].orientation[YAW];
         cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
-        HmdVector3_t gunOffset = {0.0,5.0,0.0};
-        RotateVectorByQuaternion(gunOffset, controllers[1].raworientation);
+        HmdVector3_t gunOffset = {0.0,8.0,5.0};
+        gunOffset = RotateVectorByQuaternion(gunOffset, controllers[1].raworientation);
 
         cl.aimpos[0] = controllers[1].position[0] + gunOffset.v[2];
         cl.aimpos[1] = controllers[1].position[1] + gunOffset.v[0];

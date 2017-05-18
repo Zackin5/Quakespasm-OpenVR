@@ -595,6 +595,15 @@ void CalcGunAngle (void)
 	static float oldyaw = 0;
 	static float oldpitch = 0;
 
+    // Skip everything if we're doing VR Controller aiming.
+    if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
+    {
+        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW];
+        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH]);
+        cl.viewent.angles[ROLL] = r_refdef.aimangles[ROLL];
+        return;
+    }
+
 	yaw = r_refdef.aimangles[YAW];
 	pitch = -r_refdef.aimangles[PITCH];
 
@@ -634,21 +643,12 @@ void CalcGunAngle (void)
 	oldyaw = yaw;
 	oldpitch = pitch;
 
-    if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
-    {
-        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW];
-        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH]);
-        cl.viewent.angles[ROLL] = r_refdef.aimangles[ROLL];
-    }
-    else
-    {
-        cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
-        cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH] + pitch);
-
-        cl.viewent.angles[ROLL] -= v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
-        cl.viewent.angles[PITCH] -= v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
-        cl.viewent.angles[YAW] -= v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;
-    }
+    cl.viewent.angles[YAW] = r_refdef.aimangles[YAW] + yaw;
+    cl.viewent.angles[PITCH] = -(r_refdef.aimangles[PITCH] + pitch);
+    
+    cl.viewent.angles[ROLL] -= v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
+    cl.viewent.angles[PITCH] -= v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
+    cl.viewent.angles[YAW] -= v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;
 }
 
 /*
