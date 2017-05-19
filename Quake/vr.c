@@ -129,6 +129,7 @@ cvar_t vr_aimmode = { "vr_aimmode","1", CVAR_ARCHIVE };
 cvar_t vr_deadzone = { "vr_deadzone","30",CVAR_ARCHIVE };
 cvar_t vr_viewkick = { "vr_viewkick", "0", CVAR_NONE };
 cvar_t vr_lefthanded = { "vr_lefthanded", "0", CVAR_NONE };
+cvar_t vr_gunangle = { "vr_gunangle", "32", CVAR_NONE };
 
 
 static qboolean InitOpenGLExtensions()
@@ -313,6 +314,86 @@ HmdQuaternion_t Matrix34ToQuaternion(HmdMatrix34_t in)
     return q;
 }
 
+// Following functions borrowed from http://icculus.org/~phaethon/q3a/misc/quats.html
+void AnglesToQuat(const vec3_t angles, vec4_t quat)
+{
+    vec3_t a;
+    float cr, cp, cy, sr, sp, sy, cpcy, spsy;
+
+    a[PITCH] = (M_PI / 360.0) * angles[PITCH];
+    a[YAW] = (M_PI / 360.0) * angles[YAW];
+    a[ROLL] = (M_PI / 360.0) * angles[ROLL];
+
+    cr = cos(a[ROLL]);
+    cp = cos(a[PITCH]);
+    cy = cos(a[YAW]);
+
+    sr = sin(a[ROLL]);
+    sp = sin(a[PITCH]);
+    sy = sin(a[YAW]);
+
+    cpcy = cp * cy;
+    spsy = sp * sy;
+    quat[0] = cr * cpcy + sr * spsy; // w
+    quat[1] = sr * cpcy - cr * spsy; // x
+    quat[2] = cr * sp * cy + sr * cp * sy; // y
+    quat[3] = cr * cp * sy - sr * sp * cy; // z
+}
+
+HmdQuaternion_t AnglesToHmdQuat(const vec3_t angles)
+{
+    HmdQuaternion_t final;
+    vec3_t a;
+    float cr, cp, cy, sr, sp, sy, cpcy, spsy;
+
+    a[PITCH] = (M_PI / 360.0) * angles[PITCH];
+    a[YAW] = (M_PI / 360.0) * angles[YAW];
+    a[ROLL] = (M_PI / 360.0) * angles[ROLL];
+
+    cr = cos(a[ROLL]);
+    cp = cos(a[PITCH]);
+    cy = cos(a[YAW]);
+
+    sr = sin(a[ROLL]);
+    sp = sin(a[PITCH]);
+    sy = sin(a[YAW]);
+
+    cpcy = cp * cy;
+    spsy = sp * sy;
+    final.w = cr * cpcy + sr * spsy; // w
+    final.x = sr * cpcy - cr * spsy; // x
+    final.y = cr * sp * cy + sr * cp * sy; // y
+    final.z = cr * cp * sy - sr * sp * cy; // z
+
+    return final;
+}
+
+// Converts a quaternion to a euler angle
+void QuatToAngles(const vec4_t q, vec3_t a)
+{
+    vec4_t q2;
+    q2[0] = q[0] * q[0];
+    q2[1] = q[1] * q[1];
+    q2[2] = q[2] * q[2];
+    q2[3] = q[3] * q[3];
+    a[ROLL] = (180.0 / M_PI)*atan2(2 * (q[2] * q[3] + q[1] * q[0]), (-q2[1] - q2[2] + q2[3] + q2[0]));
+    a[PITCH] = (180.0 / M_PI)*asin(-2 * (q[1] * q[3] - q[2] * q[0]));
+    a[YAW] = (180.0 / M_PI)*atan2(2 * (q[1] * q[2] + q[3] * q[0]), (q2[1] - q2[2] - q2[3] + q2[0]));
+}
+
+// HmdQuaternion_t version
+void HmdQuatToAngles(const HmdQuaternion_t q, vec3_t a)
+{
+    vec4_t q2;
+    q2[0] = q.w * q.w;
+    q2[1] = q.x * q.x;
+    q2[2] = q.y * q.y;
+    q2[3] = q.z * q.z;
+    a[ROLL] = (180.0 / M_PI)*atan2(2 * (q.y * q.z + q.x * q.w), (-q2[1] - q2[2] + q2[3] + q2[0]));
+    a[PITCH] = (180.0 / M_PI)*asin(-2 * (q.x * q.z - q.y * q.w));
+    a[YAW] = (180.0 / M_PI)*atan2(2 * (q.x * q.y + q.z * q.w), (q2[1] - q2[2] - q2[3] + q2[0]));
+}
+
 
 // ----------------------------------------------------------------------------
 // Callbacks for cvars
@@ -355,6 +436,7 @@ void VID_VR_Init()
     Cvar_RegisterVariable(&vr_aimmode);
     Cvar_RegisterVariable(&vr_deadzone);
     Cvar_RegisterVariable(&vr_lefthanded);
+    Cvar_RegisterVariable(&vr_gunangle);
     Cvar_SetCallback(&vr_deadzone, VR_Deadzone_f);
 
     // Sickness stuff
@@ -629,16 +711,23 @@ void VR_UpdateScreenContent()
         cl.viewangles[PITCH] = orientation[PITCH];
         cl.viewangles[YAW] = orientation[YAW];
 
-        cl.aimangles[PITCH] = controllers[1].orientation[PITCH];
+        cl.aimangles[PITCH] = controllers[1].orientation[PITCH] + vr_gunangle.value;
         cl.aimangles[YAW] = controllers[1].orientation[YAW];
         cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
-        HmdVector3_t gunOffset = {0.0,8.0,5.0};
-        gunOffset = RotateVectorByQuaternion(gunOffset, controllers[1].raworientation);
+        // Controller offset vector for the gun viewmodel
+        HmdVector3_t gunOffset = {-5.0,0.0,8.0};
 
-        cl.aimpos[0] = controllers[1].position[0] + gunOffset.v[2];
-        cl.aimpos[1] = controllers[1].position[1] + gunOffset.v[0];
-        cl.aimpos[2] = -controllers[1].position[2] - gunOffset.v[1];
+        // Convert the gun pitch cvar to a quaternion and rotate the gun offset vector
+        HmdQuaternion_t gunPitchQuat = { 0,0,0,0 };
+        vec3_t gunPitchV3 = { controllers[1].orientation[PITCH] + vr_gunangle.value, controllers[1].orientation[YAW], controllers[1].orientation[ROLL] };
+        gunPitchQuat = AnglesToHmdQuat(gunPitchV3);
+        gunOffset = RotateVectorByQuaternion(gunOffset, gunPitchQuat);
+
+        // Update aim position values
+        cl.aimpos[0] = controllers[1].position[0] - gunOffset.v[0];
+        cl.aimpos[1] = controllers[1].position[1] - gunOffset.v[1];
+        cl.aimpos[2] = -controllers[1].position[2] - gunOffset.v[2];
 
         VectorCopy(cl.aimpos, r_refdef.aimpos);
         break;
