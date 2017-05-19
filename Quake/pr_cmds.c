@@ -1345,13 +1345,9 @@ static void PF_aim (void)
 	speed = G_FLOAT(OFS_PARM1);
 	(void) speed; /* variable set but not used */
 
+    // VR controller origin logic
     if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
-    {
-        // TODO: Test this, might actually be a little high due to viewmodel adjustment calculations
-        vec3_t gunPos;
-        VectorAdd(ent->v.origin, cl.aimpos, gunPos);
-        VectorCopy(gunPos, start)
-    }
+        VectorCopy(cl.handpos[1], start)
     else
 	    VectorCopy (ent->v.origin, start)
 

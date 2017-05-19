@@ -826,10 +826,8 @@ void V_CalcRefdef(void)
     if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
     {
         vec3_t finalGunPos;
-        VectorAdd(-cl.aimpos, ent->origin, finalGunPos)
+        VectorAdd(cl.handpos[1], cl.vmeshoffset, finalGunPos)
         VectorCopy(finalGunPos, view->origin)
-
-        view->origin[2] += cl.viewheight;
     }
     else
     {

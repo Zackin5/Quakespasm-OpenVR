@@ -512,6 +512,9 @@ void VID_VR_Disable()
     VR_Shutdown();
     ovrHMD = NULL;
 
+    // Reset the view height
+    cl.viewheight = DEFAULT_VIEWHEIGHT;
+
     // TODO: Cleanup frame buffers
 
     vr_initialized = false;
@@ -715,7 +718,7 @@ void VR_UpdateScreenContent()
         cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
         // TODO: Add indipendant move angle for offhand controller
-        // TODO: Fix the weird roll bug with the gun viewmodel, likely connected to using euler angles vs quaternions
+        // TODO: Fix the weird roll bug with the gun viewmodel. Likely connected to using euler angles vs quaternions
         // TODO: Fix shoot origin not being the gun's
 
         // Controller offset vector for the gun viewmodel
@@ -726,13 +729,23 @@ void VR_UpdateScreenContent()
         HmdQuaternion_t gunPitchQuat = AnglesToHmdQuat(gunPitchV3);
 
         gunOffset = RotateVectorByQuaternion(gunOffset, gunPitchQuat);
+        VectorCopy(gunOffset.v, cl.vmeshoffset)
 
-        // Update aim position values
-        cl.aimpos[0] = controllers[1].position[0] - gunOffset.v[0];
-        cl.aimpos[1] = controllers[1].position[1] - gunOffset.v[1];
-        cl.aimpos[2] = -controllers[1].position[2] - gunOffset.v[2];
+        // Update hand position values
+        entity_t *player = &cl_entities[cl.viewentity];
 
-        VectorCopy(cl.aimpos, r_refdef.aimpos);
+        cl.handpos[0][0] = -controllers[1].position[0] + player->origin[0];
+        cl.handpos[0][1] = -controllers[1].position[1] + player->origin[1];
+        cl.handpos[0][2] = controllers[1].position[2] + player->origin[2] + cl.viewheight;
+
+        cl.handpos[1][0] = -controllers[1].position[0] + player->origin[0];
+        cl.handpos[1][1] = -controllers[1].position[1] + player->origin[1];
+        cl.handpos[1][2] = controllers[1].position[2] + player->origin[2] + cl.viewheight;
+
+        // Update hand rotations
+        VectorCopy(controllers[0].orientation, cl.handrot[0])
+        VectorCopy(controllers[1].orientation, cl.handrot[1])
+
         break;
     }
     cl.viewangles[ROLL] = orientation[ROLL];
@@ -823,8 +836,15 @@ void VR_ShowCrosshair()
     glDisable(GL_CULL_FACE);
 
     // calc the line and draw
-    VectorCopy(cl.viewent.origin, start);
-    start[2] -= cl.viewheight - 10;
+    // TODO: Make the laser align correctly
+    if (vr_aimmode.value == VR_AIMMODE_CONTROLLER)
+        VectorCopy(cl.handpos[1], start)
+    else
+    {
+        VectorCopy(cl.viewent.origin, start);
+        start[2] -= cl.viewheight - 10;
+    }
+
     AngleVectors(cl.aimangles, forward, right, up);
 
     switch ((int)vr_crosshair.value)
@@ -897,6 +917,7 @@ void VR_Draw2D()
     glDisable(GL_DEPTH_TEST); // prevents drawing sprites on sprites from interferring with one another
     glEnable(GL_BLEND);
 
+    // TODO: Make the menus' position sperate from the right hand. Centered on last view dir?
     VectorCopy(r_refdef.aimangles, menu_angles)
 
         if (vr_aimmode.value == VR_AIMMODE_HEAD_MYAW || vr_aimmode.value == VR_AIMMODE_HEAD_MYAW_MPITCH)
@@ -980,7 +1001,10 @@ void VR_DrawSbar()
 
     AngleVectors(sbar_angles, forward, right, up);
 
-    VectorMA(cl.viewent.origin, 1.0, forward, target);
+    if (vr_aimmode.value == VR_AIMMODE_CONTROLLER)
+        VectorMA(cl.handpos[0], 1.0, forward, target);
+    else
+        VectorMA(cl.viewent.origin, 1.0, forward, target);
 
     glTranslatef(target[0], target[1], target[2]);
     glRotatef(sbar_angles[YAW] - 90, 0, 0, 1); // rotate around z

@@ -121,7 +121,6 @@ typedef struct
 	vec3_t		vieworg;
 	vec3_t		viewangles;
 	vec3_t		aimangles;
-    vec3_t      aimpos;
 
 	float		fov_x, fov_y;
 
