@@ -627,8 +627,8 @@ void VR_UpdateScreenContent()
                 if (vr_lefthanded.value == true)
                 {
                     // Swap controller values for our southpaw players
-                    controllers[1].rawvector = rawControllerPos;
-                    controllers[1].raworientation = rawControllerQuat;
+                    controllers[0].rawvector = rawControllerPos;
+                    controllers[0].raworientation = rawControllerQuat;
                     controllers[0].position[0] = rawControllerPos.v[2] * meters_to_units;
                     controllers[0].position[1] = rawControllerPos.v[0] * meters_to_units;
                     controllers[0].position[2] = rawControllerPos.v[1] * meters_to_units;
@@ -705,9 +705,8 @@ void VR_UpdateScreenContent()
     }
     break;
 
-        // 7: Controller Aiming
+        // 7: Controller Aiming;
     case VR_AIMMODE_CONTROLLER:
-        // TODO: fix logic
         cl.viewangles[PITCH] = orientation[PITCH];
         cl.viewangles[YAW] = orientation[YAW];
 
@@ -715,13 +714,17 @@ void VR_UpdateScreenContent()
         cl.aimangles[YAW] = controllers[1].orientation[YAW];
         cl.aimangles[ROLL] = controllers[1].orientation[ROLL];
 
+        // TODO: Add indipendant move angle for offhand controller
+        // TODO: Fix the weird roll bug with the gun viewmodel, likely connected to using euler angles vs quaternions
+        // TODO: Fix shoot origin not being the gun's
+
         // Controller offset vector for the gun viewmodel
         HmdVector3_t gunOffset = {-5.0,0.0,8.0};
 
         // Convert the gun pitch cvar to a quaternion and rotate the gun offset vector
-        HmdQuaternion_t gunPitchQuat = { 0,0,0,0 };
         vec3_t gunPitchV3 = { controllers[1].orientation[PITCH] + vr_gunangle.value, controllers[1].orientation[YAW], controllers[1].orientation[ROLL] };
-        gunPitchQuat = AnglesToHmdQuat(gunPitchV3);
+        HmdQuaternion_t gunPitchQuat = AnglesToHmdQuat(gunPitchV3);
+
         gunOffset = RotateVectorByQuaternion(gunOffset, gunPitchQuat);
 
         // Update aim position values
@@ -745,7 +748,7 @@ void VR_UpdateScreenContent()
         current_eye = &eyes[i];
         RenderScreenForCurrentEye_OVR();
     }
-
+    
     // Blit mirror texture to backbuffer
     glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, eyes[0].fbo.framebuffer);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, 0);
