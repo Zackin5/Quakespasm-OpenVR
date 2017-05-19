@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "quakedef.h"
-#include "vr.h"
 
 #define	STRINGTEMP_BUFFERS		16
 #define	STRINGTEMP_LENGTH		1024
@@ -39,9 +38,6 @@ static char *PR_GetTempString (void)
 #define	MSG_ONE		1		// reliable to one (msg_entity)
 #define	MSG_ALL		2		// reliable to all
 #define	MSG_INIT	3		// write to the init string
-
-extern cvar_t vr_enabled;
-extern cvar_t vr_aimmode;
 
 /*
 ===============================================================================
@@ -1345,11 +1341,7 @@ static void PF_aim (void)
 	speed = G_FLOAT(OFS_PARM1);
 	(void) speed; /* variable set but not used */
 
-    // VR controller origin logic
-    if (vr_enabled.value && vr_aimmode.value == VR_AIMMODE_CONTROLLER)
-        VectorCopy(cl.handpos[1], start)
-    else
-	    VectorCopy (ent->v.origin, start)
+	VectorCopy (ent->v.origin, start)
 
 	start[2] += 20;
 
